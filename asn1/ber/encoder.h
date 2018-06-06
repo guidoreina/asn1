@@ -302,6 +302,10 @@ namespace asn1 {
         // Get value.
         const struct value* get(size_t idx) const;
         struct value* get(size_t idx);
+
+        // Disable copy constructor and assignment operator.
+        encoder(const encoder&) = delete;
+        encoder& operator=(const encoder&) = delete;
     };
 
     template<size_t number_static_values, size_t max_values>
