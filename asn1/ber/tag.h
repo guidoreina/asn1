@@ -13,7 +13,7 @@ namespace asn1 {
     };
 
     enum class universal_class : uint8_t {
-      EndOfContent = 0,
+      EndOfContents = 0,
       Boolean = 1,
       Integer = 2,
       Bitstring = 3,

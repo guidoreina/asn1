@@ -1,5 +1,8 @@
 #include <string.h>
+#include <math.h>
 #include "asn1/ber/common.h"
+
+#define IS_DIGIT(x) (((x) >= '0') && ((x) <= '9'))
 
 size_t asn1::ber::encode_tag(tag_class tc,
                              primitive_constructed pc,
@@ -682,4 +685,1117 @@ size_t asn1::ber::encode_generalized_time(const struct timeval& tv,
   buf[len] = 'Z';
 
   return len + 1;
+}
+
+int64_t asn1::ber::decode_integer(const void* buf, uint64_t len)
+{
+  const uint8_t* const b = static_cast<const uint8_t*>(buf);
+
+  uint64_t n;
+
+  switch (len) {
+    case 8:
+      n  = (static_cast<uint64_t>(b[0]) << 56);
+      n |= (static_cast<uint64_t>(b[1]) << 48);
+      n |= (static_cast<uint64_t>(b[2]) << 40);
+      n |= (static_cast<uint64_t>(b[3]) << 32);
+      n |= (static_cast<uint64_t>(b[4]) << 24);
+      n |= (static_cast<uint64_t>(b[5]) << 16);
+      n |= (static_cast<uint64_t>(b[6]) << 8);
+      n |=  static_cast<uint64_t>(b[7]);
+
+      return n;
+    case 7:
+      n =  (static_cast<uint64_t>(b[0]) << 48);
+      n |= (static_cast<uint64_t>(b[1]) << 40);
+      n |= (static_cast<uint64_t>(b[2]) << 32);
+      n |= (static_cast<uint64_t>(b[3]) << 24);
+      n |= (static_cast<uint64_t>(b[4]) << 16);
+      n |= (static_cast<uint64_t>(b[5]) << 8);
+      n |=  static_cast<uint64_t>(b[6]);
+
+      break;
+    case 6:
+      n =  (static_cast<uint64_t>(b[0]) << 40);
+      n |= (static_cast<uint64_t>(b[1]) << 32);
+      n |= (static_cast<uint64_t>(b[2]) << 24);
+      n |= (static_cast<uint64_t>(b[3]) << 16);
+      n |= (static_cast<uint64_t>(b[4]) << 8);
+      n |=  static_cast<uint64_t>(b[5]);
+
+      break;
+    case 5:
+      n =  (static_cast<uint64_t>(b[0]) << 32);
+      n |= (static_cast<uint64_t>(b[1]) << 24);
+      n |= (static_cast<uint64_t>(b[2]) << 16);
+      n |= (static_cast<uint64_t>(b[3]) << 8);
+      n |=  static_cast<uint64_t>(b[4]);
+
+      break;
+    case 4:
+      n =  (static_cast<uint64_t>(b[0]) << 24);
+      n |= (static_cast<uint64_t>(b[1]) << 16);
+      n |= (static_cast<uint64_t>(b[2]) << 8);
+      n |=  static_cast<uint64_t>(b[3]);
+
+      break;
+    case 3:
+      n =  (static_cast<uint64_t>(b[0]) << 16);
+      n |= (static_cast<uint64_t>(b[1]) << 8);
+      n |=  static_cast<uint64_t>(b[2]);
+
+      break;
+    case 2:
+      n =  (static_cast<uint64_t>(b[0]) << 8);
+      n |=  static_cast<uint64_t>(b[1]);
+
+      break;
+    default:
+      n = static_cast<uint64_t>(b[0]);
+  }
+
+  // If the number is positive...
+  if ((*b & 0x80) == 0) {
+    return n;
+  } else {
+    return ((~static_cast<uint64_t>(0) << (len << 3)) | n);
+  }
+}
+
+static bool decode_exponent(const uint8_t* b,
+                            uint64_t len,
+                            int64_t& exponent,
+                            uint64_t& offset)
+{
+  uint64_t n;
+  size_t l;
+  uint64_t off;
+  bool positive;
+
+  switch (b[0] & 0x03) {
+    case 0x00:
+      if (len >= 3) {
+        n = b[1];
+        l = 1;
+        off = 2;
+        positive = ((b[1] & 0x80) == 0x00);
+      } else {
+        return false;
+      }
+
+      break;
+    case 0x01:
+      if (len >= 4) {
+        n = (static_cast<uint64_t>(b[1]) << 8) | static_cast<uint64_t>(b[2]);
+        l = 2;
+        off = 3;
+        positive = ((b[1] & 0x80) == 0x00);
+      } else {
+        return false;
+      }
+
+      break;
+    case 0x02:
+      if (len >= 5) {
+        n = (static_cast<uint64_t>(b[1]) << 16) |
+            (static_cast<uint64_t>(b[2]) << 8) |
+             static_cast<uint64_t>(b[3]);
+
+        l = 3;
+        off = 4;
+        positive = ((b[1] & 0x80) == 0x00);
+      } else {
+        return false;
+      }
+
+      break;
+    default:
+      l = b[1];
+
+      if ((l > 0) && (l <= 8) && (2 + l + 1 <= len)) {
+        switch (l) {
+          case 1:
+            n = b[2];
+            break;
+          case 2:
+            n = (static_cast<uint64_t>(b[2]) << 8) |
+                 static_cast<uint64_t>(b[3]);
+
+            break;
+          case 3:
+            n = (static_cast<uint64_t>(b[2]) << 16) |
+                (static_cast<uint64_t>(b[3]) << 8) |
+                 static_cast<uint64_t>(b[4]);
+
+            break;
+          case 4:
+            n = (static_cast<uint64_t>(b[2]) << 24) |
+                (static_cast<uint64_t>(b[3]) << 16) |
+                (static_cast<uint64_t>(b[4]) << 8) |
+                 static_cast<uint64_t>(b[5]);
+
+            break;
+          case 5:
+            n = (static_cast<uint64_t>(b[2]) << 32) |
+                (static_cast<uint64_t>(b[3]) << 24) |
+                (static_cast<uint64_t>(b[4]) << 16) |
+                (static_cast<uint64_t>(b[5]) << 8) |
+                 static_cast<uint64_t>(b[6]);
+
+            break;
+          case 6:
+            n = (static_cast<uint64_t>(b[2]) << 40) |
+                (static_cast<uint64_t>(b[3]) << 32) |
+                (static_cast<uint64_t>(b[4]) << 24) |
+                (static_cast<uint64_t>(b[5]) << 16) |
+                (static_cast<uint64_t>(b[6]) << 8) |
+                 static_cast<uint64_t>(b[7]);
+
+            break;
+          case 7:
+            n = (static_cast<uint64_t>(b[2]) << 48) |
+                (static_cast<uint64_t>(b[3]) << 40) |
+                (static_cast<uint64_t>(b[4]) << 32) |
+                (static_cast<uint64_t>(b[5]) << 24) |
+                (static_cast<uint64_t>(b[6]) << 16) |
+                (static_cast<uint64_t>(b[7]) << 8) |
+                 static_cast<uint64_t>(b[8]);
+
+            break;
+          default:
+            n = (static_cast<uint64_t>(b[2]) << 56) |
+                (static_cast<uint64_t>(b[3]) << 48) |
+                (static_cast<uint64_t>(b[4]) << 40) |
+                (static_cast<uint64_t>(b[5]) << 32) |
+                (static_cast<uint64_t>(b[6]) << 24) |
+                (static_cast<uint64_t>(b[7]) << 16) |
+                (static_cast<uint64_t>(b[8]) << 8) |
+                 static_cast<uint64_t>(b[9]);
+        }
+
+        off = 2 + l;
+        positive = ((b[2] & 0x80) == 0x00);
+      } else {
+        return false;
+      }
+  }
+
+  // If the exponent is positive...
+  int64_t exp;
+  if (positive) {
+    exp = n;
+  } else {
+    exp = (~static_cast<uint64_t>(0) << (l << 3)) | n;
+  }
+
+  // If the exponent is neither too small nor too big...
+  if ((exp >= -1074) && (exp <= 1023)) {
+    exponent = exp;
+    offset = off;
+
+    return true;
+  }
+
+  return false;
+}
+
+static bool decode_significand(const uint8_t* b,
+                               uint64_t len,
+                               uint64_t& significand)
+{
+  uint64_t n;
+
+  switch (len) {
+    case 1:
+      n = b[0];
+      break;
+    case 2:
+      n = (static_cast<uint64_t>(b[0]) << 8) | static_cast<uint64_t>(b[1]);
+      break;
+    case 3:
+      n = (static_cast<uint64_t>(b[0]) << 16) |
+          (static_cast<uint64_t>(b[1]) << 8) |
+           static_cast<uint64_t>(b[2]);
+
+      break;
+    case 4:
+      n = (static_cast<uint64_t>(b[0]) << 24) |
+          (static_cast<uint64_t>(b[1]) << 16) |
+          (static_cast<uint64_t>(b[2]) << 8) |
+           static_cast<uint64_t>(b[3]);
+
+      break;
+    case 5:
+      n = (static_cast<uint64_t>(b[0]) << 32) |
+          (static_cast<uint64_t>(b[1]) << 24) |
+          (static_cast<uint64_t>(b[2]) << 16) |
+          (static_cast<uint64_t>(b[3]) << 8) |
+           static_cast<uint64_t>(b[4]);
+
+      break;
+    case 6:
+      n = (static_cast<uint64_t>(b[0]) << 40) |
+          (static_cast<uint64_t>(b[1]) << 32) |
+          (static_cast<uint64_t>(b[2]) << 24) |
+          (static_cast<uint64_t>(b[3]) << 16) |
+          (static_cast<uint64_t>(b[4]) << 8) |
+           static_cast<uint64_t>(b[5]);
+
+      break;
+    case 7:
+      n = (static_cast<uint64_t>(b[0]) << 48) |
+          (static_cast<uint64_t>(b[1]) << 40) |
+          (static_cast<uint64_t>(b[2]) << 32) |
+          (static_cast<uint64_t>(b[3]) << 24) |
+          (static_cast<uint64_t>(b[4]) << 16) |
+          (static_cast<uint64_t>(b[5]) << 8) |
+           static_cast<uint64_t>(b[6]);
+
+      break;
+    case 8:
+      n = (static_cast<uint64_t>(b[0]) << 56) |
+          (static_cast<uint64_t>(b[1]) << 48) |
+          (static_cast<uint64_t>(b[2]) << 40) |
+          (static_cast<uint64_t>(b[3]) << 32) |
+          (static_cast<uint64_t>(b[4]) << 24) |
+          (static_cast<uint64_t>(b[5]) << 16) |
+          (static_cast<uint64_t>(b[6]) << 8) |
+           static_cast<uint64_t>(b[7]);
+
+      break;
+    default:
+      return false;
+  }
+
+  significand = n;
+
+  return true;
+}
+
+bool asn1::ber::decode_real(const void* buf, uint64_t len, double& n)
+{
+  switch (len) {
+    default:
+      {
+        const uint8_t* const b = static_cast<const uint8_t*>(buf);
+
+        // Binary encoding?
+        if ((b[0] & 0x80) == 0x80) {
+          // Check base.
+          unsigned base;
+          switch (b[0] & 0x30) {
+            case 0x00:
+              base = 2;
+              break;
+            case 0x10:
+              base = 8;
+              break;
+            case 0x20:
+              base = 16;
+              break;
+            default:
+              return false;
+          }
+
+          // Decode exponent.
+          int64_t exponent;
+          uint64_t offset;
+          if (decode_exponent(b, len, exponent, offset)) {
+            // Decode significand.
+            uint64_t significand;
+            if (decode_significand(b + offset, len - offset, significand)) {
+              int64_t mantissa;
+
+              // Check factor.
+              switch (b[0] & 0x0c) {
+                case 0x00:
+                  if (significand <= 0x7fffffffffffffffULL) {
+                    mantissa = significand;
+                  } else {
+                    return false;
+                  }
+
+                  break;
+                case 0x04:
+                  if (significand <= 0x3fffffffffffffffULL) {
+                    mantissa = significand << 1;
+                  } else {
+                    return false;
+                  }
+
+                  break;
+                case 0x08:
+                  if (significand <= 0x1fffffffffffffffULL) {
+                    mantissa = significand << 2;
+                  } else {
+                    return false;
+                  }
+
+                  break;
+                default:
+                  if (significand <= 0x0fffffffffffffffULL) {
+                    mantissa = significand << 3;
+                  } else {
+                    return false;
+                  }
+
+                  break;
+              }
+
+              // Negative?
+              if ((b[0] & 0x40) == 0x40) {
+                mantissa = -mantissa;
+              }
+
+              switch (base) {
+                case 8:
+                  exponent *= 3;
+                  break;
+                case 16:
+                  exponent *= 4;
+                  break;
+              }
+
+              double res = ldexp(mantissa, exponent);
+
+              if (isfinite(res)) {
+                n = res;
+                return true;
+              }
+            }
+          }
+        } else {
+          // Decimal encoding.
+
+          enum class representation {
+            nr1,
+            nr2,
+            nr3
+          };
+
+          representation nr;
+
+          // Check given number representation.
+          switch (b[0] & 0x3f) {
+            case 1:
+              nr = representation::nr1;
+              break;
+            case 2:
+              nr = representation::nr2;
+              break;
+            case 3:
+              nr = representation::nr3;
+              break;
+            default:
+              return false;
+          }
+
+          representation rep = representation::nr1;
+
+          char str[32];
+          char* out = str;
+
+          int state = 0; // Initial state.
+
+          for (uint64_t i = 1; i < len; i++) {
+            switch (state) {
+              case 0: // Initial state.
+                switch (b[i]) {
+                  case '0':
+                  case '1':
+                  case '2':
+                  case '3':
+                  case '4':
+                  case '5':
+                  case '6':
+                  case '7':
+                  case '8':
+                  case '9':
+                    *out++ = b[i];
+
+                    state = 2; // Integer part.
+                    break;
+                  case '+':
+                  case '-':
+                    *out++ = b[i];
+
+                    state = 1; // After sign of the integer part.
+                    break;
+                  case '.':
+                  case ',':
+                    *out++ = '.';
+
+                    rep = representation::nr2;
+
+                    // After decimal separator, fractional part mandatory.
+                    state = 4;
+                    break;
+                  case ' ':
+                  case '\t':
+                    break;
+                  default:
+                    return false;
+                }
+
+                break;
+              case 1: // After sign of the integer part.
+                switch (b[i]) {
+                  case '0':
+                  case '1':
+                  case '2':
+                  case '3':
+                  case '4':
+                  case '5':
+                  case '6':
+                  case '7':
+                  case '8':
+                  case '9':
+                    *out++ = b[i];
+
+                    state = 2; // Integer part.
+                    break;
+                  case '.':
+                  case ',':
+                    *out++ = '.';
+
+                    rep = representation::nr2;
+
+                    // After decimal separator, fractional part mandatory.
+                    state = 4;
+                    break;
+                  default:
+                    return false;
+                }
+
+                break;
+              case 2: // Integer part.
+                switch (b[i]) {
+                  case '0':
+                  case '1':
+                  case '2':
+                  case '3':
+                  case '4':
+                  case '5':
+                  case '6':
+                  case '7':
+                  case '8':
+                  case '9':
+                    *out++ = b[i];
+                    break;
+                  case '.':
+                  case ',':
+                    *out++ = '.';
+
+                    rep = representation::nr2;
+
+                    // After decimal separator, fractional part optional.
+                    state = 3;
+                    break;
+                  case 'e':
+                  case 'E':
+                    *out++ = 'e';
+
+                    rep = representation::nr3;
+
+                    state = 5; // After 'e'.
+                    break;
+                  default:
+                    return false;
+                }
+
+                break;
+              case 3: // After decimal separator, fractional part optional.
+                switch (b[i]) {
+                  case '0':
+                  case '1':
+                  case '2':
+                  case '3':
+                  case '4':
+                  case '5':
+                  case '6':
+                  case '7':
+                  case '8':
+                  case '9':
+                    *out++ = b[i];
+                    break;
+                  case 'e':
+                  case 'E':
+                    *out++ = 'e';
+
+                    rep = representation::nr3;
+
+                    state = 5; // After 'e'.
+                    break;
+                  default:
+                    return false;
+                }
+
+                break;
+              case 4: // After decimal separator, fractional part mandatory.
+                switch (b[i]) {
+                  case '0':
+                  case '1':
+                  case '2':
+                  case '3':
+                  case '4':
+                  case '5':
+                  case '6':
+                  case '7':
+                  case '8':
+                  case '9':
+                    *out++ = b[i];
+
+                    // After decimal separator, fractional part optional.
+                    state = 3;
+                    break;
+                  default:
+                    return false;
+                }
+
+                break;
+              case 5: // After 'e'.
+                switch (b[i]) {
+                  case '0':
+                  case '1':
+                  case '2':
+                  case '3':
+                  case '4':
+                  case '5':
+                  case '6':
+                  case '7':
+                  case '8':
+                  case '9':
+                    *out++ = b[i];
+
+                    state = 7; // Exponent.
+                    break;
+                  case '+':
+                  case '-':
+                    *out++ = b[i];
+
+                    state = 6; // After sign of the exponent.
+                    break;
+                  default:
+                    return false;
+                }
+
+                break;
+              case 6: // After sign of the exponent.
+                switch (b[i]) {
+                  case '0':
+                  case '1':
+                  case '2':
+                  case '3':
+                  case '4':
+                  case '5':
+                  case '6':
+                  case '7':
+                  case '8':
+                  case '9':
+                    *out++ = b[i];
+
+                    state = 7; // Exponent.
+                    break;
+                  default:
+                    return false;
+                }
+
+                break;
+              case 7: // Exponent.
+                switch (b[i]) {
+                  case '0':
+                  case '1':
+                  case '2':
+                  case '3':
+                  case '4':
+                  case '5':
+                  case '6':
+                  case '7':
+                  case '8':
+                  case '9':
+                    *out++ = b[i];
+                    break;
+                  default:
+                    return false;
+                }
+
+                break;
+            }
+          }
+
+          switch (state) {
+            case 2: // Integer part.
+            case 3: // After decimal separator, fractional part optional.
+            case 7: // Exponent.
+              if (static_cast<unsigned>(nr) >= static_cast<unsigned>(rep)) {
+                *out = 0;
+                n = atof(str);
+
+                return true;
+              }
+
+              break;
+          }
+        }
+      }
+
+      break;
+    case 0:
+      // ITU X.690: 8.5.2.
+      n = 0.0;
+
+      return true;
+    case 1:
+      {
+        static const uint64_t positive_infinity = 0x7ff0000000000000ULL;
+        static const uint64_t negative_infinity = 0xfff0000000000000ULL;
+        static const uint64_t nan = 0x7ff0000000000001ULL;
+
+        const uint8_t* const b = static_cast<const uint8_t*>(buf);
+
+        switch (b[0]) {
+          case 0x40:
+            // +infinity: ITU X.690: 8.5.9.
+            memcpy(&n, &positive_infinity, sizeof(double));
+
+            return true;
+          case 0x41:
+            // -infinity: ITU X.690: 8.5.9.
+            memcpy(&n, &negative_infinity, sizeof(double));
+
+            return true;
+          case 0x42:
+            // NaN: ITU X.690: 8.5.9.
+            memcpy(&n, &nan, sizeof(double));
+
+            return true;
+          case 0x43:
+            // -0.0: ITU X.690: 8.5.3 => 8.5.9.
+            n = -0.0;
+
+            return true;
+        }
+      }
+
+      break;
+  }
+
+  return false;
+}
+
+bool asn1::ber::decode_utc_time(const void* buf, uint64_t len, time_t& t)
+{
+  const uint8_t* const b = static_cast<const uint8_t*>(buf);
+
+  if ((IS_DIGIT(b[0])) &&
+      (IS_DIGIT(b[1])) &&
+      (IS_DIGIT(b[2])) &&
+      (IS_DIGIT(b[3])) &&
+      (IS_DIGIT(b[4])) &&
+      (IS_DIGIT(b[5])) &&
+      (IS_DIGIT(b[6])) &&
+      (IS_DIGIT(b[7])) &&
+      (IS_DIGIT(b[8])) &&
+      (IS_DIGIT(b[9]))) {
+    struct tm tm;
+    tm.tm_year = ((b[0] - '0') * 10) + (b[1] - '0');
+
+    if (tm.tm_year < 70) {
+      tm.tm_year += 100;
+    }
+
+    tm.tm_mon = ((b[2] - '0') * 10) + (b[3] - '0');
+
+    if ((tm.tm_mon >= 1) && (tm.tm_mon <= 12)) {
+      tm.tm_mon--;
+
+      tm.tm_mday = ((b[4] - '0') * 10) + (b[5] - '0');
+
+      if ((tm.tm_mday >= 1) && (tm.tm_mday <= 31)) {
+        tm.tm_hour = ((b[6] - '0') * 10) + (b[7] - '0');
+
+        if (tm.tm_hour <= 23) {
+          tm.tm_min = ((b[8] - '0') * 10) + (b[9] - '0');
+
+          if (tm.tm_min <= 59) {
+            tm.tm_isdst = -1;
+
+            size_t off;
+
+            switch (b[10]) {
+              case 'Z':
+                if (len == 11) {
+                  tm.tm_sec = 0;
+
+                  t = timegm(&tm);
+
+                  return true;
+                } else {
+                  return false;
+                }
+
+                break;
+              case '0':
+              case '1':
+              case '2':
+              case '3':
+              case '4':
+              case '5':
+                if ((len >= 13) && (IS_DIGIT(b[11]))) {
+                  tm.tm_sec = ((b[10] - '0') * 10) + (b[11] - '0');
+
+                  switch (b[12]) {
+                    case 'Z':
+                      if (len == 13) {
+                        t = timegm(&tm);
+
+                        return true;
+                      } else {
+                        return false;
+                      }
+
+                      break;
+                    case '+':
+                    case '-':
+                      off = 13;
+                      break;
+                    default:
+                      return false;
+                  }
+                } else {
+                  return false;
+                }
+
+                break;
+              case '+':
+              case '-':
+                tm.tm_sec = 0;
+
+                off = 11;
+
+                break;
+              default:
+                return false;
+            }
+
+            if (off + 4 == len) {
+              if ((IS_DIGIT(b[off])) &&
+                  (IS_DIGIT(b[off + 1])) &&
+                  (IS_DIGIT(b[off + 2])) &&
+                  (IS_DIGIT(b[off + 3]))) {
+                unsigned hour = ((b[off] - '0') * 10) + (b[off + 1] - '0');
+
+                if (hour <= 23) {
+                  unsigned min = ((b[off + 2] - '0') * 10) + (b[off + 3] - '0');
+
+                  if (min <= 59) {
+                    time_t diff = (hour * 3600) + (min * 60);
+
+                    if (b[off - 1] == '+') {
+                      t = timegm(&tm) - diff;
+                    } else {
+                      t = timegm(&tm) + diff;
+                    }
+
+                    return true;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+static bool decode_time_fraction(const uint8_t* b,
+                                 uint64_t len,
+                                 uint64_t& off,
+                                 uint64_t max,
+                                 uint64_t& fraction,
+                                 uint64_t& total)
+{
+  uint64_t res = 0;
+  uint64_t n = 1;
+
+  uint64_t i;
+  for (i = off; i < len; i++) {
+    if (IS_DIGIT(b[i])) {
+      if ((n *= 10) <= max) {
+        res = (res * 10) + (b[i] - '0');
+      } else {
+        return false;
+      }
+    } else {
+      break;
+    }
+  }
+
+  if (n > 1) {
+    off = i;
+    fraction = res;
+    total = n;
+
+    return true;
+  } else {
+    return false;
+  }
+}
+
+bool asn1::ber::decode_generalized_time(const void* buf,
+                                        uint64_t len,
+                                        struct timeval& tv)
+{
+  const uint8_t* const b = static_cast<const uint8_t*>(buf);
+
+  if ((IS_DIGIT(b[0])) &&
+      (IS_DIGIT(b[1])) &&
+      (IS_DIGIT(b[2])) &&
+      (IS_DIGIT(b[3])) &&
+      (IS_DIGIT(b[4])) &&
+      (IS_DIGIT(b[5])) &&
+      (IS_DIGIT(b[6])) &&
+      (IS_DIGIT(b[7])) &&
+      (IS_DIGIT(b[8])) &&
+      (IS_DIGIT(b[9]))) {
+    struct tm tm;
+    tm.tm_year = ((b[0] - '0') * 1000) +
+                 ((b[1] - '0') * 100) +
+                 ((b[2] - '0') * 10) +
+                  (b[3] - '0');
+
+    if (tm.tm_year >= 1970) {
+      tm.tm_year -= 1900;
+
+      tm.tm_mon = ((b[4] - '0') * 10) + (b[5] - '0');
+
+      if ((tm.tm_mon >= 1) && (tm.tm_mon <= 12)) {
+        tm.tm_mon--;
+
+        tm.tm_mday = ((b[6] - '0') * 10) + (b[7] - '0');
+
+        if ((tm.tm_mday >= 1) && (tm.tm_mday <= 31)) {
+          tm.tm_hour = ((b[8] - '0') * 10) + (b[9] - '0');
+
+          if (tm.tm_hour <= 23) {
+            tm.tm_isdst = -1;
+
+            uint64_t off;
+
+            if (len >= 12) {
+              switch (b[10]) {
+                case '0':
+                case '1':
+                case '2':
+                case '3':
+                case '4':
+                case '5':
+                  if (IS_DIGIT(b[11])) {
+                    tm.tm_min = ((b[10] - '0') * 10) + (b[11] - '0');
+
+                    if (len >= 14) {
+                      switch (b[12]) {
+                        case '0':
+                        case '1':
+                        case '2':
+                        case '3':
+                        case '4':
+                        case '5':
+                          if (IS_DIGIT(b[13])) {
+                            tm.tm_sec = ((b[12] - '0') * 10) + (b[13] - '0');
+
+                            if (len >= 16) {
+                              switch (b[14]) {
+                                case '.':
+                                case ',':
+                                  {
+                                    off = 15;
+
+                                    uint64_t fraction;
+                                    uint64_t total;
+
+                                    if (decode_time_fraction(b,
+                                                             len,
+                                                             off,
+                                                             1000000ULL,
+                                                             fraction,
+                                                             total)) {
+                                      tv.tv_usec = fraction *
+                                                   (1000000ULL / total);
+                                    } else {
+                                      return false;
+                                    }
+                                  }
+
+                                  break;
+                                default:
+                                  tv.tv_usec = 0;
+
+                                  off = 14;
+                              }
+                            } else {
+                              tv.tv_usec = 0;
+
+                              off = 14;
+                            }
+                          } else {
+                            return false;
+                          }
+
+                          break;
+                        case '.':
+                        case ',':
+                          {
+                            off = 13;
+
+                            uint64_t fraction;
+                            uint64_t total;
+
+                            if (decode_time_fraction(b,
+                                                     len,
+                                                     off,
+                                                     10000000ULL,
+                                                     fraction,
+                                                     total)) {
+                              uint64_t microseconds = fraction *
+                                                      (60000000ULL / total);
+
+                              tm.tm_sec = microseconds / 1000000ULL;
+                              tv.tv_usec = microseconds % 1000000ULL;
+                            } else {
+                              return false;
+                            }
+                          }
+
+                          break;
+                        default:
+                          tm.tm_sec = 0;
+
+                          tv.tv_usec = 0;
+
+                          off = 12;
+                      }
+                    } else {
+                      tm.tm_sec = 0;
+
+                      tv.tv_usec = 0;
+
+                      off = 12;
+                    }
+                  } else {
+                    return false;
+                  }
+
+                  break;
+                case '.':
+                case ',':
+                  {
+                    off = 11;
+
+                    uint64_t fraction;
+                    uint64_t total;
+
+                    if (decode_time_fraction(b,
+                                             len,
+                                             off,
+                                             100000000ULL,
+                                             fraction,
+                                             total)) {
+                      uint64_t microseconds = fraction *
+                                              (3600000000ULL / total);
+
+                      tm.tm_min = microseconds / 60000000ULL;
+
+                      microseconds %= 60000000ULL;
+
+                      tm.tm_sec = microseconds / 1000000ULL;
+                      tv.tv_usec = microseconds % 1000000ULL;
+                    } else {
+                      return false;
+                    }
+                  }
+
+                  break;
+                default:
+                  tm.tm_min = 0;
+                  tm.tm_sec = 0;
+
+                  tv.tv_usec = 0;
+
+                  off = 10;
+              }
+            } else {
+              tm.tm_min = 0;
+              tm.tm_sec = 0;
+
+              tv.tv_usec = 0;
+
+              off = 10;
+            }
+
+            if (off + 1 == len) {
+              if (b[off] == 'Z') {
+                // UTC.
+                tv.tv_sec = timegm(&tm);
+
+                return true;
+              }
+            } else if (off == len) {
+              // Local time.
+              tv.tv_sec = mktime(&tm);
+
+              return true;
+            } else if (off + 3 == len) {
+              if (((b[off] == '+') || (b[off] == '-')) &&
+                  (IS_DIGIT(b[off + 1])) &&
+                  (IS_DIGIT(b[off + 2]))) {
+                unsigned hour = ((b[off + 1] - '0') * 10) + (b[off + 2] - '0');
+
+                if (hour <= 23) {
+                  time_t diff = hour * 3600;
+
+                  if (b[off] == '+') {
+                    tv.tv_sec = timegm(&tm) - diff;
+                  } else {
+                    tv.tv_sec = timegm(&tm) + diff;
+                  }
+
+                  return true;
+                }
+              }
+            } else if (off + 5 == len) {
+              if (((b[off] == '+') || (b[off] == '-')) &&
+                  (IS_DIGIT(b[off + 1])) &&
+                  (IS_DIGIT(b[off + 2])) &&
+                  (IS_DIGIT(b[off + 3])) &&
+                  (IS_DIGIT(b[off + 4]))) {
+                unsigned hour = ((b[off + 1] - '0') * 10) + (b[off + 2] - '0');
+
+                if (hour <= 23) {
+                  unsigned min = ((b[off + 3] - '0') * 10) + (b[off + 4] - '0');
+
+                  if (min <= 59) {
+                    time_t diff = (hour * 3600) + (min * 60);
+
+                    if (b[off] == '+') {
+                      tv.tv_sec = timegm(&tm) - diff;
+                    } else {
+                      tv.tv_sec = timegm(&tm) + diff;
+                    }
+
+                    return true;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return false;
 }

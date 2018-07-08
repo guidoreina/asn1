@@ -22,6 +22,16 @@ namespace asn1 {
     size_t encode_utc_time(time_t t, uint8_t* buf);
 
     size_t encode_generalized_time(const struct timeval& tv, uint8_t* buf);
+
+    int64_t decode_integer(const void* buf, uint64_t len);
+
+    bool decode_real(const void* buf, uint64_t len, double& n);
+
+    bool decode_utc_time(const void* buf, uint64_t len, time_t& t);
+
+    bool decode_generalized_time(const void* buf,
+                                 uint64_t len,
+                                 struct timeval& tv);
   }
 }
 
