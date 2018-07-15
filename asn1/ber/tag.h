@@ -57,6 +57,37 @@ namespace asn1 {
       Implicit,
       Explicit
     };
+
+    static inline const char* to_string(tag_class tc)
+    {
+      switch (tc) {
+        case tag_class::Universal:       return "Universal";
+        case tag_class::Application:     return "Application";
+        case tag_class::ContextSpecific: return "Context-specific";
+        case tag_class::Private:         return "Private";
+        default:                         return "(unknown)";
+      }
+    }
+
+    const char* to_string(universal_class uc);
+
+    static inline const char* to_string(primitive_constructed pc)
+    {
+      switch (pc) {
+        case primitive_constructed::Primitive:   return "Primitive";
+        case primitive_constructed::Constructed: return "Constructed";
+        default:                                 return "(unknown)";
+      }
+    }
+
+    static inline const char* to_string(tagging tg)
+    {
+      switch (tg) {
+        case tagging::Implicit: return "Implicit";
+        case tagging::Explicit: return "Explicit";
+        default:                return "(unknown)";
+      }
+    }
   }
 }
 
