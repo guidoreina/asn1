@@ -121,17 +121,37 @@ class asn1_object {
     }
 
     // Start constructed.
-    bool start_constructed(asn1::ber::tag_class tc, asn1::ber::tag_number tn)
+    bool start_constructed(asn1::ber::tag_class tc,
+                           asn1::ber::tag_number tn,
+                           uint64_t valuelen,
+                           uint64_t totallen)
     {
       indent();
 
-      // Universal class?
-      if (tc == asn1::ber::tag_class::Universal) {
-        printf("%s: %s\n",
-               to_string(tc),
-               to_string(static_cast<asn1::ber::universal_class>(tn)));
+      if (valuelen != asn1::ber::decoder::indefinite_length) {
+        // Universal class?
+        if (tc == asn1::ber::tag_class::Universal) {
+          printf("%s: %s, header length (TL): %lu, total length (TLV): %lu\n",
+                 to_string(tc),
+                 to_string(static_cast<asn1::ber::universal_class>(tn)),
+                 totallen - valuelen,
+                 totallen);
+        } else {
+          printf("%s: %lu, header length (TL): %lu, total length (TLV): %lu\n",
+                 to_string(tc),
+                 tn,
+                 totallen - valuelen,
+                 totallen);
+        }
       } else {
-        printf("%s: %lu\n", to_string(tc), tn);
+        // Universal class?
+        if (tc == asn1::ber::tag_class::Universal) {
+          printf("%s: %s, indefinite length\n",
+                 to_string(tc),
+                 to_string(static_cast<asn1::ber::universal_class>(tn)));
+        } else {
+          printf("%s: %lu, indefinite length\n", to_string(tc), tn);
+        }
       }
 
       indent();
@@ -143,13 +163,15 @@ class asn1_object {
     }
 
     // End constructed.
-    bool end_constructed(asn1::ber::tag_class tc, asn1::ber::tag_number tn)
+    bool end_constructed(asn1::ber::tag_class tc,
+                         asn1::ber::tag_number tn,
+                         uint64_t totallen)
     {
       if (_M_depth > 0) {
         _M_depth--;
 
         indent();
-        printf("}\n");
+        printf("} /* total length (TLV): %lu */\n", totallen);
 
         return true;
       } else {
@@ -273,14 +295,7 @@ class asn1_object {
       indent();
       spaces(indent_size);
 
-      if (len == valuelen) {
-        printf("Value:\n");
-      } else {
-        printf("Value %lu-%lu/%lu:\n",
-               valueoff + 1,
-               valueoff + len,
-               valuelen);
-      }
+      printf("Value %lu-%lu/%lu:\n", valueoff + 1, valueoff + len, valuelen);
 
       ascii_dump(buf, len);
 
@@ -289,14 +304,10 @@ class asn1_object {
       indent();
       spaces(indent_size);
 
-      if (len == valuelen) {
-        printf("Hexadecimal:\n");
-      } else {
-        printf("Hexadecimal %lu-%lu/%lu:\n",
-               valueoff + 1,
-               valueoff + len,
-               valuelen);
-      }
+      printf("Hexadecimal %lu-%lu/%lu:\n",
+             valueoff + 1,
+             valueoff + len,
+             valuelen);
 
       hexdump(buf, len);
 
@@ -339,7 +350,7 @@ class asn1_object {
                ...) const
     {
       indent();
-      printf("[%s]\n", type);
+      printf("[%s] Length: %lu\n", type, len);
 
       indent();
       spaces(indent_size);

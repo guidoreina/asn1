@@ -12,6 +12,8 @@ namespace asn1 {
   namespace ber {
     class decoder {
       public:
+        static const uint64_t indefinite_length = ULLONG_MAX;
+
         // Constructor.
         decoder() = default;
 
@@ -96,8 +98,6 @@ namespace asn1 {
     template<typename Reader, typename ASN1Object, size_t max_depth>
     bool decoder::decode(Reader& reader, ASN1Object& obj)
     {
-      static const uint64_t indefinite_length = ULLONG_MAX;
-
       struct value {
         // Tag class.
         tag_class tc;
@@ -284,7 +284,10 @@ namespace asn1 {
                       // If the maximum depth has not been exceeded...
                       if (++depth <= max_depth) {
                         // Start constructed.
-                        if (obj.start_constructed(v->tc, v->tn)) {
+                        if (obj.start_constructed(v->tc,
+                                                  v->tn,
+                                                  indefinite_length,
+                                                  0)) {
                           v->valuelen = indefinite_length;
 
                           v++;
@@ -370,7 +373,10 @@ namespace asn1 {
                 } else {
                   // If the maximum depth has not been exceeded...
                   if (++depth <= max_depth) {
-                    if (obj.start_constructed(v->tc, v->tn)) {
+                    if (obj.start_constructed(v->tc,
+                                              v->tn,
+                                              v->valuelen,
+                                              v->totallen)) {
                       v++;
 
                       s = state::initial;
@@ -393,8 +399,11 @@ namespace asn1 {
 
                   s = state::processing_value;
                 } else {
-                  if ((obj.start_constructed(v->tc, v->tn)) &&
-                      (obj.end_constructed(v->tc, v->tn))) {
+                  if ((obj.start_constructed(v->tc,
+                                             v->tn,
+                                             v->valuelen,
+                                             v->totallen)) &&
+                      (obj.end_constructed(v->tc, v->tn, v->totallen))) {
                     s = state::end_of_value;
                   } else {
                     obj.error(error::callback, offset);
@@ -525,11 +534,11 @@ namespace asn1 {
                       v--;
 
                       if (v->valuelen == indefinite_length) {
-                        if (obj.end_constructed(v->tc, v->tn)) {
-                          depth--;
+                        // Compute length of the TLV.
+                        v->totallen = offset - v->offset;
 
-                          // Compute length of the TLV.
-                          v->totallen = offset - v->offset;
+                        if (obj.end_constructed(v->tc, v->tn, v->totallen)) {
+                          depth--;
                         } else {
                           obj.error(error::callback, offset);
                           return false;
@@ -743,7 +752,7 @@ namespace asn1 {
 
                     break;
                   } else if (len == v->valuelen) {
-                    if (obj.end_constructed(v->tc, v->tn)) {
+                    if (obj.end_constructed(v->tc, v->tn, v->totallen)) {
                       depth--;
                     } else {
                       obj.error(error::callback, offset);
