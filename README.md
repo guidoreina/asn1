@@ -45,8 +45,8 @@ It receives two parameters:
   * `int getc()`: to read the next character.
   * `int64_t get(const void*& buf, uint64_t len)`: to read up to `len` bytes (data is not copied, a reference is returned).
 * `obj`: template object which must have the following methods:
-  * `bool start_constructed(asn1::ber::tag_class tc, asn1::ber::tag_number tn)`: start of a constructed.
-  * `bool end_constructed(asn1::ber::tag_class tc, asn1::ber::tag_number tn)`: end of a constructed.
+  * `bool start_constructed(asn1::ber::tag_class tc, asn1::ber::tag_number tn, uint64_t valuelen, uint64_t totallen)`: start of a constructed.
+  * `bool end_constructed(asn1::ber::tag_class tc, asn1::ber::tag_number tn, uint64_t totallen)`: end of a constructed.
   * `bool boolean(const void* buf, uint64_t len, bool val)`: boolean value.
   * `bool integer(const void* buf, uint64_t len, int64_t val)`: integer value.
   * `bool null()`: null value.
