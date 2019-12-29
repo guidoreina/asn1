@@ -1009,7 +1009,7 @@ bool asn1::ber::decode_real(const void* buf, uint64_t len, double& n)
               // Check factor.
               switch (b[0] & 0x0c) {
                 case 0x00:
-                  if (significand <= 0x7fffffffffffffffULL) {
+                  if (significand <= 0x7fffffffffffffffull) {
                     mantissa = significand;
                   } else {
                     return false;
@@ -1017,7 +1017,7 @@ bool asn1::ber::decode_real(const void* buf, uint64_t len, double& n)
 
                   break;
                 case 0x04:
-                  if (significand <= 0x3fffffffffffffffULL) {
+                  if (significand <= 0x3fffffffffffffffull) {
                     mantissa = significand << 1;
                   } else {
                     return false;
@@ -1025,7 +1025,7 @@ bool asn1::ber::decode_real(const void* buf, uint64_t len, double& n)
 
                   break;
                 case 0x08:
-                  if (significand <= 0x1fffffffffffffffULL) {
+                  if (significand <= 0x1fffffffffffffffull) {
                     mantissa = significand << 2;
                   } else {
                     return false;
@@ -1033,7 +1033,7 @@ bool asn1::ber::decode_real(const void* buf, uint64_t len, double& n)
 
                   break;
                 default:
-                  if (significand <= 0x0fffffffffffffffULL) {
+                  if (significand <= 0x0fffffffffffffffull) {
                     mantissa = significand << 3;
                   } else {
                     return false;
@@ -1347,9 +1347,9 @@ bool asn1::ber::decode_real(const void* buf, uint64_t len, double& n)
       return true;
     case 1:
       {
-        static const uint64_t positive_infinity = 0x7ff0000000000000ULL;
-        static const uint64_t negative_infinity = 0xfff0000000000000ULL;
-        static const uint64_t nan = 0x7ff0000000000001ULL;
+        static const uint64_t positive_infinity = 0x7ff0000000000000ull;
+        static const uint64_t negative_infinity = 0xfff0000000000000ull;
+        static const uint64_t nan = 0x7ff0000000000001ull;
 
         const uint8_t* const b = static_cast<const uint8_t*>(buf);
 
@@ -1620,11 +1620,11 @@ bool asn1::ber::decode_generalized_time(const void* buf,
                                     if (decode_time_fraction(b,
                                                              len,
                                                              off,
-                                                             1000000ULL,
+                                                             1000000ull,
                                                              fraction,
                                                              total)) {
                                       tv.tv_usec = fraction *
-                                                   (1000000ULL / total);
+                                                   (1000000ull / total);
                                     } else {
                                       return false;
                                     }
@@ -1657,14 +1657,14 @@ bool asn1::ber::decode_generalized_time(const void* buf,
                             if (decode_time_fraction(b,
                                                      len,
                                                      off,
-                                                     10000000ULL,
+                                                     10000000ull,
                                                      fraction,
                                                      total)) {
                               uint64_t microseconds = fraction *
-                                                      (60000000ULL / total);
+                                                      (60000000ull / total);
 
-                              tm.tm_sec = microseconds / 1000000ULL;
-                              tv.tv_usec = microseconds % 1000000ULL;
+                              tm.tm_sec = microseconds / 1000000ull;
+                              tv.tv_usec = microseconds % 1000000ull;
                             } else {
                               return false;
                             }
@@ -1701,18 +1701,18 @@ bool asn1::ber::decode_generalized_time(const void* buf,
                     if (decode_time_fraction(b,
                                              len,
                                              off,
-                                             100000000ULL,
+                                             100000000ull,
                                              fraction,
                                              total)) {
                       uint64_t microseconds = fraction *
-                                              (3600000000ULL / total);
+                                              (3600000000ull / total);
 
-                      tm.tm_min = microseconds / 60000000ULL;
+                      tm.tm_min = microseconds / 60000000ull;
 
-                      microseconds %= 60000000ULL;
+                      microseconds %= 60000000ull;
 
-                      tm.tm_sec = microseconds / 1000000ULL;
-                      tv.tv_usec = microseconds % 1000000ULL;
+                      tm.tm_sec = microseconds / 1000000ull;
+                      tv.tv_usec = microseconds % 1000000ull;
                     } else {
                       return false;
                     }
@@ -1794,6 +1794,66 @@ bool asn1::ber::decode_generalized_time(const void* buf,
           }
         }
       }
+    }
+  }
+
+  return false;
+}
+
+bool asn1::ber::decode_oid(const void* buf,
+                           uint64_t len,
+                           uint64_t* oid,
+                           size_t& ncomponents)
+{
+  if (len > 0) {
+    const uint8_t* const b = static_cast<const uint8_t*>(buf);
+
+    size_t count = 0;
+
+    uint64_t component = 0;
+    size_t componentlen = 0;
+
+    for (uint64_t i = 0; i < len; i++) {
+      if ((componentlen < 10) || (b[i] <= 1)) {
+        component |= (b[i] & 0x7fu);
+
+        // If the most significant bit is not set...
+        if ((b[i] & 0x80u) == 0) {
+          if (count < max_oid_components) {
+            if (count > 0) {
+              oid[count++] = component;
+            } else {
+              if (component < 0x80ull) {
+                if ((oid[0] = component / 40) <= 2) {
+                  oid[1] = component % 40;
+                } else {
+                  return false;
+                }
+              } else {
+                oid[0] = 2;
+                oid[1] = component - 80;
+              }
+
+              count = 2;
+            }
+
+            component = 0;
+            componentlen = 0;
+          } else {
+            return false;
+          }
+        } else {
+          component <<= 7;
+          componentlen++;
+        }
+      } else {
+        return false;
+      }
+    }
+
+    if (componentlen == 0) {
+      ncomponents = count;
+      return true;
     }
   }
 

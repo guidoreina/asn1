@@ -585,6 +585,27 @@ namespace asn1 {
                     }
 
                     break;
+                  case universal_class::ObjectIdentifier:
+                    {
+                      // Decode object identifier.
+                      uint64_t oid[max_oid_components];
+                      size_t ncomponents;
+                      if (decode_oid(ptr, v->valuelen, oid, ncomponents)) {
+                        // Give data to the user.
+                        if (!obj.oid(ptr, v->valuelen, oid, ncomponents)) {
+                          obj.error(error::callback, offset);
+                          return false;
+                        }
+                      } else {
+                        obj.error(error::invalid_value,
+                                  offset - v->valuelen,
+                                  "invalid oid");
+
+                        return false;
+                      }
+                    }
+
+                    break;
                   case universal_class::Real:
                     {
                       // Decode real.

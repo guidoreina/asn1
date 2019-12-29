@@ -15,6 +15,7 @@ The following data values are supported:
 * bitstring
 * octetstring
 * null
+* object identifier
 * real
 * enumerated
 * UTF8String
@@ -50,6 +51,7 @@ It receives two parameters:
   * `bool boolean(const void* buf, uint64_t len, bool val)`: boolean value.
   * `bool integer(const void* buf, uint64_t len, int64_t val)`: integer value.
   * `bool null()`: null value.
+  * `bool oid(const void* buf, uint64_t len, const uint64_t* oid, size_t ncomponents)`: object identifier
   * `bool real(const void* buf, uint64_t len, double val)`: real value.
   * `bool enumerated(const void* buf, uint64_t len, int64_t val)`: enumerated value.
   * `bool utc_time(const void* buf, uint64_t len, time_t val)`: UTCTime value.

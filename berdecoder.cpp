@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
+#include <inttypes.h>
 #include "asn1/ber/decoder.h"
 
 class reader {
@@ -201,6 +202,23 @@ class asn1_object {
     {
       indent();
       printf("[Null]\n");
+
+      return true;
+    }
+
+    // Object identifier.
+    bool oid(const void* buf,
+             uint64_t len,
+             const uint64_t* oid,
+             size_t ncomponents)
+    {
+      indent();
+
+      for (size_t i = 0; i < ncomponents; i++) {
+        printf("%s%" PRIu64, (i > 0) ? "." : "", oid[i]);
+      }
+
+      printf("\n");
 
       return true;
     }

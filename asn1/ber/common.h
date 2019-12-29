@@ -8,6 +8,9 @@
 
 namespace asn1 {
   namespace ber {
+    // Maximum number of object identifier components.
+    static constexpr const size_t max_oid_components = 64;
+
     size_t encode_tag(tag_class tc,
                       primitive_constructed pc,
                       tag_number tn,
@@ -32,6 +35,11 @@ namespace asn1 {
     bool decode_generalized_time(const void* buf,
                                  uint64_t len,
                                  struct timeval& tv);
+
+    bool decode_oid(const void* buf,
+                    uint64_t len,
+                    uint64_t* oid,
+                    size_t& ncomponents);
   }
 }
 
