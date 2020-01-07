@@ -360,12 +360,13 @@ namespace asn1 {
               // Compute total length.
               v->totallen = (offset - v->offset) + v->valuelen;
 
+              v->valueoff = 0;
+
               // If there is value...
               if (v->valuelen > 0) {
                 // Primitive?
                 if (v->pc == primitive_constructed::Primitive) {
                   v->remaining = v->valuelen;
-                  v->valueoff = 0;
 
                   len = 0;
 
