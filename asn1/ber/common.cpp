@@ -1551,7 +1551,8 @@ bool asn1::ber::decode_generalized_time(const void* buf,
 {
   const uint8_t* const b = static_cast<const uint8_t*>(buf);
 
-  if ((IS_DIGIT(b[0])) &&
+  if ((len >= 10) &&
+      (IS_DIGIT(b[0])) &&
       (IS_DIGIT(b[1])) &&
       (IS_DIGIT(b[2])) &&
       (IS_DIGIT(b[3])) &&
